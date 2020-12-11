@@ -29,6 +29,7 @@ def getControus(filename):
 
 	return boxes
 
+# Return bounding box overlap
 def getIou(detection, rectangle):
 	dx1, dy1, dx2, dy2 = detection
 	rx1, ry1, rx2, ry2 = rectangle
@@ -51,43 +52,48 @@ def getIou(detection, rectangle):
 	return p_overlap
 
 
-def detectEar(filename):
+def detectEar(filename, scaleFactor, minNeighbours):
 	tp = 0
 	fn = 0
 	fp = 0
 
 	image = cv2.imread(join("test", filename))
-	leftEar = cascadeLeftEar.detectMultiScale(image, 1.02, 4)
-	rightEar = cascadeRightEar.detectMultiScale(image, 1.02, 4)
+	leftEar = cascadeLeftEar.detectMultiScale(image, scaleFactor, minNeighbours)
+	rightEar = cascadeRightEar.detectMultiScale(image, scaleFactor, minNeighbours)
 	earsDetected = [*leftEar, *rightEar]
 
 	rectangles = getControus(filename)
 
 	for x, y, w, h in earsDetected:
 		cv2.rectangle(image, (x,y), (x+w, y+h), (128, 255, 0), 2)
-		for i in range(len(rectangles)):
-			rect = rectangles[i]
+		for rect in rectangles:
 			overlap = getIou([x, y, x+w, y+h], rect)
 
-			if overlap >= 40:
+			if overlap >= 0.4:
 				tp = tp + 1
-				rectangles.pop(i)
+				rectangles.remove(rect)
 
 			cv2.rectangle(image, (rect[0],rect[1]), (rect[2], rect[3]), (255, 0, 0), 2)
-	
-	if len(earsDetected) == 0:
-		print("None detected")
 
-	cv2.imshow("slika", image)
-	cv2.waitKey()
+	if len(earsDetected) == 0 and len(rectangles) != 0:
+		fp = fp + len(rectangles)
 
-	print(tp, fn, fp)
+	if len(earsDetected) > len(rectangles):
+		fn = len(earsDetected) - tp - len(rectangles)
 
-tp = 0 #Pravilno zaznani
-fn = 0 #Nepravilno zaznani
-fp = 0 #Nezaznani
+	return [tp, fn, fp]
+
+TP = 0 #Pravilno zaznani
+FN = 0 #Nepravilno zaznani
+FP = 0 #Nezaznani
 
 for f in listdir("test"):
-	detectEar(f)
+	tp, fn, fp = detectEar(f, 1.01, 5)
+	TP = TP + tp
+	FN = FN + fn
+	FP = FP + fp
 
-#getIou([340, 90, 377, 151], [341, 88, 377, 155])
+print(TP, FN, FP)
+
+accuracy = TP / (TP + FN + FP)
+print("Accuracy:", round(accuracy * 100, 2), "%")
